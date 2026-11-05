@@ -1,0 +1,21 @@
+# Local Python environment
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.idea/
+.vscode/
+
+# Generated demo data and downloads
+assets/
+downloads/
+*.log
+*.pcap
+*.pcapng
+
+# Local configuration
+.env
+.env.*
+!.env.example
+.DS_Store
+Thumbs.db
