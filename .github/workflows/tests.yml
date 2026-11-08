@@ -1,4 +1,4 @@
-name: Protocol tests
+name: Tests
 
 on:
   push:
@@ -8,12 +8,38 @@ permissions:
   contents: read
 
 jobs:
-  unit-tests:
+  linux:
+    name: Linux · Python ${{ matrix.python }} (with ffmpeg)
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.10", "3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.13'
-      - name: Run protocol regression tests
+          python-version: ${{ matrix.python }}
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends ffmpeg
+      - name: Unit, transport and video end-to-end tests
+        run: python -m unittest discover -s tests -v
+      - name: Full demo (discovery + server + adaptive streaming)
+        run: python -m streamlink_rudp demo --quick --out demo-output
+      - name: Downloaded video is valid
+        run: ffprobe -v error -show_entries format=duration -of csv=p=0 demo-output/stream.mp4
+
+  cross-platform:
+    name: ${{ matrix.os }} · transport tests
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Tests (video tests are skipped without ffmpeg)
         run: python -m unittest discover -s tests -v

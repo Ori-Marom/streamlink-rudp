@@ -1,43 +1,58 @@
 # Validation
 
-## Local results
-
-Validated on Windows with Python **3.13.5**:
-
-- **7 regression tests passed** with `python -m unittest discover -s tests -v`.
-- **Local end-to-end smoke check passed**: DHCP discovery and acknowledgement, UDP DNS
-  lookup, three TCP downloads, and three RUDP downloads.
-- Each downloaded file matched its **5,888-byte source payload exactly**. This spans
-  five RUDP data packets per file with the current 1,400-byte maximum payload.
+How the project is checked, and what each check proves.
 
 ## Reproduce
 
-From the repository root:
-
 ```sh
-python -m unittest discover -s tests -v
-python tests/smoke.py
+python -m unittest discover -s tests -v       # 39 tests, about 25 s
+python -m streamlink_rudp demo --quick         # end-to-end smoke run
+python -m streamlink_rudp bench                # experiments + charts (needs matplotlib)
 ```
 
-The smoke harness starts isolated child processes, selects temporary unprivileged ports,
-uses a temporary asset/download directory, and terminates its own child services afterward.
-It requires local socket access. It uses binary fixture content rather than actual JPEG
-images because its assertion concerns transport integrity.
+Video tests need `ffmpeg` and `ffprobe` on the PATH; without them they are skipped
+and everything else still runs. CI runs the full suite on Linux with Python
+3.10 to 3.13 (with ffmpeg, plus the quick demo and an `ffprobe` check of its
+output), and the transport and system tests on Windows and macOS.
 
-Simulated packet loss and delay are disabled in the smoke server. This confirms a stable
-baseline, not resilience under arbitrary loss, latency, concurrency, or malicious input.
-The optional HTTP resolver is covered at the handler level by the unit tests; live HTTP/TLS
-behavior is not part of this smoke run. No throughput benchmark or video-playback claim is made.
+## Test suite
 
-## Preparation fixes
+| Area | File | What is checked |
+|---|---|---|
+| Wire format | `test_units.py` | Header round trip; **every single bit flip** in a packet is rejected; truncated and length-mismatched packets are rejected; checksum matches the RFC 1071 example; SACK/SYN payloads; 32-bit sequence wrap-around |
+| RTO | `test_units.py` | RFC 6298 formulas for the first and later samples, backoff doubling and cap, minimum RTO |
+| Congestion control | `test_units.py` | Slow start, congestion avoidance growth, one window reduction per recovery, partial vs full ACK, timeout |
+| ABR + buffer | `test_units.py` | Starts low, steps up one level at a time, holds with a low buffer, panic drop, harmonic mean resists outliers, stall counting |
+| Transport | `test_transport.py` | Object sizes 0 B to 250 KB including MSS boundaries; 10% loss in both directions; reordering + duplication + corruption together; 60% loss on the handshake; Go-Back-N correctness; recovery from bottleneck queue drops; SACK retransmits less than Go-Back-N; packets for another connection ID ignored; server error replies; unreachable server and silent receiver time out; emulator determinism |
+| Server | `test_system.py` | RUDP and TCP fetches through a lossy link; six concurrent clients; hostname resolution; path traversal (`../`, absolute paths) and missing files rejected on both transports |
+| Discovery | `test_system.py` | DHCP DORA, NAK, pool exhaustion and release; live DHCP, DNS and DNS-over-HTTP lookups |
+| Video | `test_system.py` | `prepare` produces renditions with equal segment counts and correct hashes; a full adaptive stream over 5% loss decodes with **zero ffmpeg errors**, has audio and video, and the right duration; segments alternating between renditions decode cleanly |
 
-The supplied architecture and filenames were preserved. Three focused corrections were
-made before publishing:
+The suite was run repeatedly (more than ten consecutive passes) to check for
+timing-dependent flakiness; the one flaky case found, a sender left
+retransmitting after the receiver had exited under 60% loss, was fixed with the
+TIME_WAIT-style linger described in the protocol spec.
 
-1. `RUDPHeader.unpack()` now maps checksum and payload-length fields explicitly. The
-   original positional constructor call swapped them, breaking checksum verification.
-2. The alternate `rudp_packet.py` wrapper now includes the payload when packing a checksum.
-3. Its string representation now uses the existing `header.seq` attribute.
+## Benchmark results
 
-The regression suite covers these corrections. The original uploaded source files on the
-author's computer were not changed; fixes apply to the prepared repository copy.
+From `docs/images/results.json` (Linux, Python 3.13, loopback with the user-space emulator):
+
+| Experiment | Result |
+|---|---|
+| 8 Mbps bottleneck, 40 ms RTT | 7.6 Mbps goodput (95% utilization), 3 fast recoveries, 0 timeouts |
+| 1% loss each way, 40 ms RTT | SACK 4.40 Mbps vs Go-Back-N 1.79 Mbps; retransmissions 1.0% vs 31.3% |
+| 10% loss each way, 40 ms RTT | SACK 0.64 Mbps vs Go-Back-N 0.16 Mbps |
+| ABR, 7.6 → 1.3 → 7.6 Mbps | 6 switches, 0 stalls, 0.31 s startup |
+
+## Bugs fixed relative to the first version
+
+| Problem in v1 | Fix |
+|---|---|
+| A dropped SYN or FIN (the sender's own 5% artificial loss applied to them) aborted the transfer | SYN, FIN and GET are retransmitted with RTO backoff |
+| Sequence numbers restarted at 0 for every file and there was no connection ID, so a late packet could corrupt the next file | Random ISN + 32-bit connection ID + one socket per transfer |
+| All clients shared one UDP socket: a second client's request was read as an ACK | Each transfer gets its own socket and thread |
+| `while True: pass` kept a CPU core at 100% | Server waits on an event |
+| No timeout on the UDP manifest request: a lost reply hung the client forever | The manifest is a normal reliable transfer |
+| A timed-out transfer silently left a truncated file | Size + SHA-256 verification per segment |
+| ACK checksums were not verified by the server | Every packet is verified at decode time |
+| Fixed 2 s timeout, Go-Back-N retransmission, no exit from fast recovery | RFC 6298 RTO, SACK, NewReno |
