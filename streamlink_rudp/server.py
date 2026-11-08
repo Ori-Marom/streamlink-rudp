@@ -34,12 +34,14 @@ class RequestError(Exception):
 class MediaServer:
     def __init__(self, root: Path, host: str = "127.0.0.1", udp_port: int = DEFAULT_UDP_PORT,
                  tcp_port: int | None = DEFAULT_TCP_PORT, netem: NetemConfig | None = None,
-                 sender_config: SenderConfig | None = None, max_sessions: int = 64):
+                 sender_config: SenderConfig | None = None, max_sessions: int = 64,
+                 telemetry=None):
         self.root = Path(root).resolve()
         self.host = host
         self.sender_config = sender_config or SenderConfig()
         self.emulator = NetworkEmulator(netem)
         self.max_sessions = max_sessions
+        self.telemetry = telemetry
         self._sessions: dict[tuple, threading.Thread] = {}
         self._paths: dict[str, PathState] = {}  # per-client RTT/ssthresh cache (RFC 2140)
         self._lock = threading.Lock()
@@ -160,7 +162,7 @@ class MediaServer:
         try:
             sock.bind((self.host, 0))
             sender = Sender(self.emulator.wrap(sock), addr, conn, data, self.sender_config,
-                            path=self._paths.get(addr[0]))
+                            path=self._paths.get(addr[0]), telemetry=self.telemetry)
             stats = sender.run()
             state = sender.path_state()
             if state is not None:

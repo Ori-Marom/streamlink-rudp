@@ -5,7 +5,7 @@ How the project is checked, and what each check proves.
 ## Reproduce
 
 ```sh
-python -m unittest discover -s tests -v       # 39 tests, about 25 s
+python -m unittest discover -s tests -v       # 47 tests, about 30 s
 python -m streamlink_rudp demo --quick         # end-to-end smoke run
 python -m streamlink_rudp bench                # experiments + charts (needs matplotlib)
 ```
@@ -26,12 +26,21 @@ output), and the transport and system tests on Windows and macOS.
 | Transport | `test_transport.py` | Object sizes 0 B to 250 KB including MSS boundaries; 10% loss in both directions; reordering + duplication + corruption together; 60% loss on the handshake; Go-Back-N correctness; recovery from bottleneck queue drops; SACK retransmits less than Go-Back-N; packets for another connection ID ignored; server error replies; unreachable server and silent receiver time out; emulator determinism |
 | Server | `test_system.py` | RUDP and TCP fetches through a lossy link; six concurrent clients; hostname resolution; path traversal (`../`, absolute paths) and missing files rejected on both transports |
 | Discovery | `test_system.py` | DHCP DORA, NAK, pool exhaustion and release; live DHCP, DNS and DNS-over-HTTP lookups |
+| Dashboard | `test_dashboard.py` | Page, info and state API; segments stream and are browser-ready; network presets and manual values; quality pinning; auto scenario; Server-Sent Events feed; unknown routes. Remux regressions found in Chrome: the AAC configuration must be in the MP4 header, and fragments must keep a continuous timeline with no edit list, also across renditions |
 | Video | `test_system.py` | `prepare` produces renditions with equal segment counts and correct hashes; a full adaptive stream over 5% loss decodes with **zero ffmpeg errors**, has audio and video, and the right duration; segments alternating between renditions decode cleanly |
 
 The suite was run repeatedly (more than ten consecutive passes) to check for
 timing-dependent flakiness; the one flaky case found, a sender left
 retransmitting after the receiver had exited under 60% loss, was fixed with the
 TIME_WAIT-style linger described in the protocol spec.
+
+## Browser check
+
+The dashboard was verified in headless Chrome (Playwright): with the auto scenario
+cycling through all five network presets for 72 s, the video played continuously
+(no 2-second interval without progress), the browser decoded all three
+resolutions (640, 1280 and 1920 pixels wide), and the page logged no errors, in
+light and dark mode and at phone width.
 
 ## Benchmark results
 

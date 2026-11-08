@@ -1,0 +1,590 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>StreamLink Live</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='4' fill='%232a78d6'/%3E%3Cpath d='M6 4.5v7l5.5-3.5z' fill='white'/%3E%3C/svg%3E">
+<style>
+:root {
+  color-scheme: light;
+  --surface-0: #f4f4f2; --surface-1: #fcfcfb; --surface-2: #efeeeb; --border: #e0dfdb;
+  --text-1: #0b0b0b; --text-2: #52514e; --text-3: #7c7b76; --grid: #e7e6e2;
+  --s-blue: #2a78d6; --s-orange: #eb6834; --s-aqua: #1baf7a; --s-violet: #6250d6;
+  --accent: #2a78d6; --accent-ink: #ffffff; --good: #008300; --warn: #c98500; --bad: #e34948;
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+    --surface-0: #111110; --surface-1: #1a1a19; --surface-2: #242422; --border: #33332f;
+    --text-1: #f0efec; --text-2: #c3c2b7; --text-3: #8f8e86; --grid: #2c2c29;
+    --s-blue: #3987e5; --s-orange: #d95926; --s-aqua: #199e70; --s-violet: #9085e9;
+    --accent: #3987e5; --accent-ink: #0b0b0b; --good: #3fb43f; --warn: #e0a326; --bad: #e66767;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --surface-0: #111110; --surface-1: #1a1a19; --surface-2: #242422; --border: #33332f;
+  --text-1: #f0efec; --text-2: #c3c2b7; --text-3: #8f8e86; --grid: #2c2c29;
+  --s-blue: #3987e5; --s-orange: #d95926; --s-aqua: #199e70; --s-violet: #9085e9;
+  --accent: #3987e5; --accent-ink: #0b0b0b; --good: #3fb43f; --warn: #e0a326; --bad: #e66767;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--surface-0); color: var(--text-1);
+  font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+.wrap { max-width: 1320px; margin: 0 auto; padding: 16px; }
+header { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
+header h1 { font-size: 18px; margin: 0; letter-spacing: -0.01em; }
+header .sub { color: var(--text-2); font-size: 13px; }
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px;
+  background: var(--surface-1); border: 1px solid var(--border); font-size: 12px; color: var(--text-2); }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-3); }
+.dot.live { background: var(--good); box-shadow: 0 0 0 3px color-mix(in srgb, var(--good) 25%, transparent); }
+header .spacer { flex: 1; }
+.card { background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px; }
+.top { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 14px; }
+@media (max-width: 960px) { .top { grid-template-columns: 1fr; } }
+.player { position: relative; overflow: hidden; background: #000; border-radius: 12px; aspect-ratio: 16 / 9; }
+.player video { width: 100%; height: 100%; display: block; background: #000; }
+.badge { position: absolute; left: 12px; bottom: 52px; padding: 4px 10px; border-radius: 8px; font-weight: 600;
+  font-size: 13px; color: #fff; background: rgba(0,0,0,.6); backdrop-filter: blur(4px); pointer-events: none; }
+.badge small { font-weight: 400; opacity: .8; margin-left: 6px; }
+.overlay { position: absolute; inset: 0; display: grid; place-items: center; color: #ddd; font-size: 14px;
+  background: rgba(0,0,0,.55); text-align: center; padding: 20px; }
+.overlay.hidden { display: none; }
+.unmute { position: absolute; right: 12px; bottom: 52px; padding: 6px 12px; border-radius: 8px; border: 0;
+  background: rgba(0,0,0,.6); color: #fff; font: inherit; font-size: 12px; cursor: pointer; }
+.tiles { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
+@media (max-width: 960px) { .tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.tile { padding: 10px 12px; }
+.tile .k { font-size: 12px; color: var(--text-2); }
+.tile .v { font-size: 22px; font-weight: 650; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.tile .v small { font-size: 12px; font-weight: 500; color: var(--text-2); margin-left: 3px; letter-spacing: 0; }
+.tile .h { font-size: 11.5px; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.side { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.panel { padding: 14px; }
+.panel h2 { font-size: 13px; margin: 0 0 10px; color: var(--text-2); font-weight: 600;
+  text-transform: uppercase; letter-spacing: .04em; }
+.seg { display: flex; flex-wrap: wrap; gap: 6px; }
+#presets { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.seg button { flex: 1 1 auto; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--border);
+  background: var(--surface-2); color: var(--text-1); font: inherit; font-size: 13px; cursor: pointer; }
+.seg button:hover { border-color: var(--text-3); }
+.seg button.on { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.slider { margin-top: 12px; }
+.slider label { display: flex; justify-content: space-between; font-size: 13px; color: var(--text-2); }
+.slider label b { color: var(--text-1); font-variant-numeric: tabular-nums; }
+.slider input { width: 100%; accent-color: var(--accent); margin: 6px 0 0; }
+.toggle { display: flex; align-items: center; gap: 10px; margin-top: 14px; font-size: 13px; cursor: pointer; }
+.toggle input { width: 16px; height: 16px; accent-color: var(--accent); }
+.log { max-height: 196px; overflow-y: auto; font-size: 12.5px; margin: 0; padding: 0; list-style: none; }
+.log li { display: grid; grid-template-columns: 46px 16px minmax(0, 1fr); gap: 6px; padding: 4px 0;
+  border-bottom: 1px solid var(--grid); align-items: baseline; }
+.log li:last-child { border-bottom: 0; }
+.log .t { color: var(--text-3); font-variant-numeric: tabular-nums; }
+.log .i { text-align: center; }
+.log .d { color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.log .d b { color: var(--text-1); font-weight: 600; }
+.charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 14px; }
+@media (max-width: 960px) { .charts { grid-template-columns: 1fr; } }
+.chart { padding: 12px 14px 8px; position: relative; }
+.chart h3 { margin: 0; font-size: 14px; font-weight: 650; }
+.chart .desc { color: var(--text-2); font-size: 12px; margin: 2px 0 6px; }
+.legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; color: var(--text-2); margin-bottom: 4px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 14px; height: 0; border-top: 2px solid; display: inline-block; }
+.sw.dash { border-top-style: dashed; }
+.sw.pt { width: 8px; height: 8px; border: 0; border-radius: 50%; }
+.sw.tri { width: 0; height: 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 8px solid; }
+canvas { width: 100%; height: 190px; display: block; }
+.tip { position: absolute; pointer-events: none; background: var(--surface-1); border: 1px solid var(--border);
+  border-radius: 8px; padding: 6px 9px; font-size: 12px; box-shadow: 0 4px 14px rgba(0,0,0,.12);
+  white-space: nowrap; display: none; z-index: 2; }
+.tip .row { display: flex; gap: 8px; align-items: center; justify-content: space-between; }
+.tip .row b { font-variant-numeric: tabular-nums; }
+.tip .tt { color: var(--text-3); margin-bottom: 2px; }
+footer { color: var(--text-3); font-size: 12px; margin-top: 14px; text-align: center; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>StreamLink Live</h1>
+    <span class="sub">Adaptive video over a custom reliable UDP transport</span>
+    <span class="spacer"></span>
+    <span class="pill"><span class="dot" id="liveDot"></span><span id="liveText">Connecting…</span></span>
+    <span class="pill" id="clock">0:00</span>
+  </header>
+
+  <div class="top">
+    <div>
+      <div class="player">
+        <video id="video" controls muted playsinline></video>
+        <div class="badge" id="badge">—</div>
+        <button class="unmute" id="unmute" type="button">🔇 Unmute</button>
+        <div class="overlay" id="overlay">Waiting for the first segment…</div>
+      </div>
+      <div class="tiles">
+        <div class="card tile"><div class="k">Quality</div><div class="v" id="tQuality">—</div><div class="h" id="hQuality">&nbsp;</div></div>
+        <div class="card tile"><div class="k">Bandwidth estimate</div><div class="v" id="tEst">—</div><div class="h" id="hEst">&nbsp;</div></div>
+        <div class="card tile"><div class="k">Round-trip time</div><div class="v" id="tRtt">—</div><div class="h" id="hRtt">&nbsp;</div></div>
+        <div class="card tile"><div class="k">Buffer</div><div class="v" id="tBuf">—</div><div class="h" id="hBuf">&nbsp;</div></div>
+        <div class="card tile"><div class="k">Retransmitted</div><div class="v" id="tRetx">—</div><div class="h" id="hRetx">&nbsp;</div></div>
+        <div class="card tile"><div class="k">Stalls</div><div class="v" id="tStall">—</div><div class="h" id="hStall">&nbsp;</div></div>
+      </div>
+    </div>
+
+    <div class="side">
+      <div class="card panel">
+        <h2>Network</h2>
+        <div class="seg" id="presets" role="group" aria-label="Network preset"></div>
+        <div class="slider">
+          <label for="sRate">Bandwidth <b id="vRate">—</b></label>
+          <input type="range" id="sRate" min="0" max="1000" step="1">
+        </div>
+        <div class="slider">
+          <label for="sDelay">One-way delay <b id="vDelay">—</b></label>
+          <input type="range" id="sDelay" min="0" max="300" step="1">
+        </div>
+        <div class="slider">
+          <label for="sLoss">Random packet loss <b id="vLoss">—</b></label>
+          <input type="range" id="sLoss" min="0" max="100" step="1">
+        </div>
+        <label class="toggle"><input type="checkbox" id="scenario"> Auto scenario: network changes every ~15 s</label>
+      </div>
+      <div class="card panel">
+        <h2>Quality</h2>
+        <div class="seg" id="quality" role="group" aria-label="Quality"></div>
+      </div>
+      <div class="card panel" style="flex:1">
+        <h2>Events</h2>
+        <ul class="log" id="log" aria-live="polite"></ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="charts">
+    <div class="card chart" id="cThroughput">
+      <h3>Throughput and quality</h3>
+      <div class="desc">Bottleneck capacity vs what each segment actually got, and the rendition the ABR chose</div>
+      <div class="legend">
+        <span><i class="sw dash" style="border-color:var(--text-3)"></i>Capacity</span>
+        <span><i class="sw pt" style="background:var(--s-orange)"></i>Segment throughput</span>
+        <span><i class="sw" style="border-color:var(--s-blue)"></i>Chosen bitrate</span>
+      </div>
+      <canvas></canvas><div class="tip"></div>
+    </div>
+    <div class="card chart" id="cCwnd">
+      <h3>Congestion window</h3>
+      <div class="desc">NewReno: slow start, additive increase, halving on loss</div>
+      <div class="legend">
+        <span><i class="sw" style="border-color:var(--s-blue)"></i>cwnd</span>
+        <span><i class="sw dash" style="border-color:var(--text-3)"></i>ssthresh</span>
+        <span><i class="sw tri" style="border-top-color:var(--s-orange)"></i>Fast retransmit</span>
+        <span><i class="sw tri" style="border-top-color:var(--text-1)"></i>Timeout</span>
+      </div>
+      <canvas></canvas><div class="tip"></div>
+    </div>
+    <div class="card chart" id="cBuffer">
+      <h3>Playback buffer</h3>
+      <div class="desc">Seconds of video downloaded ahead of the playhead (target 10 s)</div>
+      <div class="legend"><span><i class="sw" style="border-color:var(--s-aqua)"></i>Buffer</span></div>
+      <canvas></canvas><div class="tip"></div>
+    </div>
+    <div class="card chart" id="cRtt">
+      <h3>Round-trip time</h3>
+      <div class="desc">Smoothed RTT and the retransmission timeout derived from it (RFC 6298)</div>
+      <div class="legend">
+        <span><i class="sw" style="border-color:var(--s-violet)"></i>SRTT</span>
+        <span><i class="sw dash" style="border-color:var(--text-3)"></i>RTO</span>
+      </div>
+      <canvas></canvas><div class="tip"></div>
+    </div>
+  </div>
+  <footer>Every frame you see crossed the emulated network over RUDP before reaching this page.</footer>
+</div>
+
+<script>
+"use strict";
+const $ = (id) => document.getElementById(id);
+const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+const WINDOW = 90;              // seconds shown in the charts
+const MIME = 'video/mp4; codecs="avc1.640028, mp4a.40.2"';
+let info = null, latest = null, dragging = null;
+
+// ---------------------------------------------------------------- formatting
+const fmtKbps = (k) => k == null ? "—" : k >= 1000 ? `${(k / 1000).toFixed(k >= 10000 ? 0 : 1)}<small>Mbps</small>` : `${Math.round(k)}<small>kbps</small>`;
+const fmtKbpsText = (k) => k == null ? "unlimited" : k >= 1000 ? `${(k / 1000).toFixed(1)} Mbps` : `${Math.round(k)} kbps`;
+const fmtTime = (t) => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}`;
+// Bandwidth slider is logarithmic: 300 kbps … 25 Mbps
+const R_MIN = 300, R_MAX = 25000;
+const rateToSlider = (k) => Math.round(1000 * Math.log(k / R_MIN) / Math.log(R_MAX / R_MIN));
+const sliderToRate = (v) => Math.round(R_MIN * Math.pow(R_MAX / R_MIN, v / 1000) / 50) * 50;
+
+// ---------------------------------------------------------------- player (Media Source Extensions)
+const video = $("video");
+const player = { ms: null, sb: null, queue: [], fetching: false, ranges: [], started: false };
+
+function initPlayer() {
+  if (!window.MediaSource || !MediaSource.isTypeSupported(MIME)) {
+    $("overlay").textContent = "This browser cannot play H.264 through Media Source Extensions. Try Chrome, Edge or Firefox.";
+    return;
+  }
+  player.ms = new MediaSource();
+  video.src = URL.createObjectURL(player.ms);
+  player.ms.addEventListener("sourceopen", () => {
+    player.sb = player.ms.addSourceBuffer(MIME);
+    // Segments keep their source timestamps, so every rendition lines up on one timeline;
+    // each loop of the video is shifted forward by one video duration.
+    player.sb.mode = "segments";
+    player.sb.addEventListener("updateend", pump);
+    pump();
+  });
+}
+
+const segMeta = {};
+function enqueue(meta) {
+  if (!meta) return;
+  segMeta[meta.seq] = meta;
+  if (player.queue.some((m) => m.seq === meta.seq)) return;
+  player.queue.push(meta);
+  player.queue.sort((a, b) => a.seq - b.seq);
+  pump();
+}
+
+function bufferedEnd() {
+  const b = player.sb && player.sb.buffered;
+  return b && b.length ? b.end(b.length - 1) : 0;
+}
+
+async function pump() {
+  const sb = player.sb;
+  if (!sb || player.ms.readyState !== "open" || sb.updating || player.fetching || !player.queue.length) return;
+  // Keep memory bounded: drop video more than 30 s behind the playhead.
+  if (sb.buffered.length && video.currentTime - sb.buffered.start(0) > 30) {
+    sb.remove(0, video.currentTime - 20);
+    return;
+  }
+  const meta = player.queue.shift();
+  player.fetching = true;
+  try {
+    const res = await fetch(`/seg/${meta.seq}.mp4`);
+    if (!res.ok) throw new Error(`segment ${meta.seq}: HTTP ${res.status}`);
+    const buf = await res.arrayBuffer();
+    const start = bufferedEnd();
+    player.fetching = false;
+    if (player.ms.readyState !== "open" || sb.updating) { player.queue.unshift(meta); return; }
+    sb.timestampOffset = meta.loop * info.duration;
+    sb.appendBuffer(buf);
+    sb.addEventListener("updateend", () => {
+      player.ranges.push({ start, end: bufferedEnd(), meta });
+      if (player.ranges.length > 80) player.ranges.shift();
+      if (!player.started) {
+        player.started = true;
+        $("overlay").classList.add("hidden");
+        if (sb.buffered.length) video.currentTime = sb.buffered.start(0);
+        video.play().catch(() => {});
+      }
+    }, { once: true });
+  } catch (err) {
+    player.fetching = false;
+    console.warn(err);
+    setTimeout(pump, 200);
+  }
+}
+
+// A stalled element sitting just before buffered data (a tiny gap) is nudged forward.
+setInterval(() => {
+  const b = player.sb && player.ms && player.ms.readyState === "open" ? player.sb.buffered : null;
+  if (!b || video.paused && !player.started) return;
+  for (let i = 0; i < b.length; i++) {
+    const gap = b.start(i) - video.currentTime;
+    if (gap > 0 && gap < 0.5 && video.readyState < 3) { video.currentTime = b.start(i) + 0.01; break; }
+  }
+}, 250);
+
+// Recover from a decoder error by starting a fresh player at the newest segments.
+video.addEventListener("error", () => {
+  console.warn("video error", video.error && video.error.message);
+  const resume = latest && latest.segments ? latest.segments.last : null;
+  player.queue = []; player.ranges = []; player.started = false; player.fetching = false;
+  initPlayer();
+  if (resume != null) fetch("/api/state").then((r) => r.json()).then((s) => {
+    for (let q = Math.max(s.segments.first, resume - 1); q <= s.segments.last; q++) enqueue(segMeta[q]);
+  });
+});
+
+function playingMeta() {
+  const t = video.currentTime;
+  for (let i = player.ranges.length - 1; i >= 0; i--) {
+    const r = player.ranges[i];
+    if (t >= r.start - 0.05 && t < r.end) return r.meta;
+  }
+  return null;
+}
+
+$("unmute").addEventListener("click", () => {
+  video.muted = !video.muted;
+  $("unmute").textContent = video.muted ? "🔇 Unmute" : "🔊 Mute";
+  video.play().catch(() => {});
+});
+video.addEventListener("volumechange", () => { $("unmute").textContent = video.muted ? "🔇 Unmute" : "🔊 Mute"; });
+
+// ---------------------------------------------------------------- charts
+const data = { t: [], capacity: [], bitrate: [], cwnd: [], ssthresh: [], buffer: [], srtt: [], rto: [] };
+const points = [];   // segment throughput dots {t, kbps, rendition}
+const marks = [];    // {t, kind}
+
+function pushSample(s) {
+  const n = s.network, p = s.playback, tr = s.transport;
+  data.t.push(s.t);
+  data.capacity.push(n.rate_kbps);
+  data.bitrate.push(p.current ? p.current.bitrate_kbps : null);
+  data.cwnd.push(tr.transfers || tr.cwnd ? tr.cwnd : null);
+  data.ssthresh.push(tr.ssthresh && tr.ssthresh < 1000 ? tr.ssthresh : null);
+  data.buffer.push(p.buffer);
+  data.srtt.push(tr.srtt_ms);
+  data.rto.push(tr.rto_ms || null);
+  const cutoff = s.t - WINDOW - 5;
+  while (data.t.length && data.t[0] < cutoff) for (const k in data) data[k].shift();
+  while (points.length && points[0].t < cutoff) points.shift();
+  while (marks.length && marks[0].t < cutoff) marks.shift();
+}
+
+class Chart {
+  constructor(root, spec) {
+    this.root = root; this.spec = spec;
+    this.canvas = root.querySelector("canvas"); this.tip = root.querySelector(".tip");
+    this.hoverT = null;
+    this.canvas.addEventListener("mousemove", (e) => Chart.hover(this, e));
+    this.canvas.addEventListener("mouseleave", () => Chart.hover(null));
+  }
+  static all = [];
+  static hoverTime = null;
+  static hover(chart, e) {
+    if (!chart) { Chart.hoverTime = null; } else {
+      const r = chart.canvas.getBoundingClientRect();
+      const x = e.clientX - r.left;
+      if (x < chart.pad.l || x > r.width - chart.pad.r) { Chart.hoverTime = null; }
+      else Chart.hoverTime = chart.x0 + (x - chart.pad.l) / (r.width - chart.pad.l - chart.pad.r) * WINDOW;
+    }
+    Chart.all.forEach((c) => c.draw());
+  }
+  draw() {
+    const c = this.canvas, dpr = window.devicePixelRatio || 1;
+    const w = c.clientWidth, h = c.clientHeight;
+    if (c.width !== Math.round(w * dpr) || c.height !== Math.round(h * dpr)) { c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); }
+    const g = c.getContext("2d");
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    g.clearRect(0, 0, w, h);
+    const now = data.t.length ? data.t[data.t.length - 1] : 0;
+    this.x0 = Math.max(0, now - WINDOW);
+    const pad = this.pad = { l: 46, r: 10, t: 8, b: 22 };
+    const pw = w - pad.l - pad.r, ph = h - pad.t - pad.b;
+    let ymax = this.spec.min || 1;
+    for (const s of this.spec.series) for (let i = 0; i < data.t.length; i++) {
+      const v = data[s.key][i];
+      if (v != null && data.t[i] >= this.x0) ymax = Math.max(ymax, v);
+    }
+    if (this.spec.points) for (const p of points) if (p.t >= this.x0) ymax = Math.max(ymax, p.kbps);
+    ymax = niceMax(ymax * 1.12);
+    const X = (t) => pad.l + (t - this.x0) / WINDOW * pw;
+    const Y = (v) => pad.t + ph - v / ymax * ph;
+    // grid + axes
+    g.font = "11px system-ui, sans-serif"; g.fillStyle = css("--text-3"); g.strokeStyle = css("--grid"); g.lineWidth = 1;
+    g.textAlign = "right"; g.textBaseline = "middle";
+    for (let i = 0; i <= 4; i++) {
+      const v = ymax * i / 4, y = Math.round(Y(v)) + 0.5;
+      g.beginPath(); g.moveTo(pad.l, y); g.lineTo(w - pad.r, y); g.stroke();
+      g.fillText(this.spec.fmt(v), pad.l - 6, y);
+    }
+    g.textAlign = "center"; g.textBaseline = "top";
+    const step = 15;
+    for (let t = Math.ceil(this.x0 / step) * step; t <= this.x0 + WINDOW; t += step) g.fillText(fmtTime(t), X(t), h - pad.b + 6);
+    g.save(); g.beginPath(); g.rect(pad.l, pad.t - 2, pw, ph + 4); g.clip();
+    // series
+    for (const s of this.spec.series) {
+      g.strokeStyle = css(s.color); g.lineWidth = s.width || 2; g.setLineDash(s.dash ? [5, 4] : []);
+      g.lineJoin = "round"; g.lineCap = "round";
+      g.beginPath(); let pen = false, prev = null;
+      for (let i = 0; i < data.t.length; i++) {
+        const v = data[s.key][i];
+        if (v == null) { pen = false; prev = null; continue; }
+        const x = X(data.t[i]), y = Y(v);
+        if (!pen) { g.moveTo(x, y); pen = true; }
+        else if (s.step) { g.lineTo(x, Y(prev)); g.lineTo(x, y); }
+        else g.lineTo(x, y);
+        prev = v;
+      }
+      g.stroke();
+    }
+    g.setLineDash([]);
+    if (this.spec.points) {
+      g.fillStyle = css("--s-orange"); g.strokeStyle = css("--surface-1"); g.lineWidth = 2;
+      for (const p of points) { g.beginPath(); g.arc(X(p.t), Y(p.kbps), 4, 0, 7); g.fill(); g.stroke(); }
+    }
+    if (this.spec.marks) for (const m of marks) {
+      g.fillStyle = css(m.kind === "timeout" ? "--text-1" : "--s-orange");
+      const x = X(m.t), y = pad.t + 2;
+      g.beginPath(); g.moveTo(x - 5, y); g.lineTo(x + 5, y); g.lineTo(x, y + 8); g.closePath(); g.fill();
+    }
+    g.restore();
+    // crosshair + tooltip
+    const ht = Chart.hoverTime;
+    if (ht != null && data.t.length) {
+      let best = 0;
+      for (let i = 0; i < data.t.length; i++) if (Math.abs(data.t[i] - ht) < Math.abs(data.t[best] - ht)) best = i;
+      const x = Math.round(X(data.t[best])) + 0.5;
+      g.strokeStyle = css("--text-3"); g.lineWidth = 1; g.beginPath(); g.moveTo(x, pad.t); g.lineTo(x, pad.t + ph); g.stroke();
+      let rows = this.spec.series.map((s) => {
+        const v = data[s.key][best];
+        if (v != null) { g.fillStyle = css(s.color); g.strokeStyle = css("--surface-1"); g.lineWidth = 2;
+          g.beginPath(); g.arc(x, Y(v), 4, 0, 7); g.fill(); g.stroke(); }
+        return `<div class="row"><span>${s.label}</span><b>${v == null ? "—" : this.spec.fmtTip(v)}</b></div>`;
+      }).join("");
+      if (this.spec.points) {
+        const near = points.filter((p) => Math.abs(p.t - data.t[best]) < 2.5).pop();
+        if (near) rows += `<div class="row"><span>Segment (${near.rendition})</span><b>${this.spec.fmtTip(near.kbps)}</b></div>`;
+      }
+      this.tip.innerHTML = `<div class="tt">${fmtTime(data.t[best])}</div>${rows}`;
+      this.tip.style.display = "block";
+      const tw = this.tip.offsetWidth;
+      const left = x + 14 + tw > w ? x - tw - 14 : x + 14;
+      this.tip.style.left = `${left + this.canvas.offsetLeft}px`;
+      this.tip.style.top = `${this.canvas.offsetTop + 8}px`;
+    } else this.tip.style.display = "none";
+  }
+}
+function niceMax(v) {
+  const p = Math.pow(10, Math.floor(Math.log10(v))), m = v / p;
+  return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 2.5 ? 2.5 : m <= 5 ? 5 : 10) * p;
+}
+const kfmt = (v) => v >= 1000 ? `${+(v / 1000).toFixed(1)}M` : `${Math.round(v)}k`;
+const kTip = (v) => fmtKbpsText(v);
+Chart.all = [
+  new Chart($("cThroughput"), { min: 1000, fmt: kfmt, fmtTip: kTip, points: true, series: [
+    { key: "capacity", label: "Capacity", color: "--text-3", dash: true, step: true, width: 1.5 },
+    { key: "bitrate", label: "Chosen bitrate", color: "--s-blue", step: true } ] }),
+  new Chart($("cCwnd"), { min: 10, fmt: (v) => Math.round(v), fmtTip: (v) => `${v.toFixed(1)} seg`, marks: true, series: [
+    { key: "cwnd", label: "cwnd", color: "--s-blue" },
+    { key: "ssthresh", label: "ssthresh", color: "--text-3", dash: true, width: 1.5 } ] }),
+  new Chart($("cBuffer"), { min: 12, fmt: (v) => `${Math.round(v)}s`, fmtTip: (v) => `${v.toFixed(1)} s`, series: [
+    { key: "buffer", label: "Buffer", color: "--s-aqua" } ] }),
+  new Chart($("cRtt"), { min: 50, fmt: (v) => `${Math.round(v)}`, fmtTip: (v) => `${Math.round(v)} ms`, series: [
+    { key: "srtt", label: "SRTT", color: "--s-violet" },
+    { key: "rto", label: "RTO", color: "--text-3", dash: true, width: 1.5 } ] }),
+];
+window.addEventListener("resize", () => Chart.all.forEach((c) => c.draw()));
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => Chart.all.forEach((c) => c.draw()));
+
+// ---------------------------------------------------------------- controls
+async function post(path, body) {
+  const res = await fetch(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  if (res.ok) render(await res.json(), false);
+}
+function buildControls() {
+  const pre = $("presets");
+  for (const [key, p] of Object.entries(info.presets)) {
+    const b = document.createElement("button");
+    b.type = "button"; b.dataset.key = key; b.textContent = p.label;
+    b.title = `${fmtKbpsText(p.rate_kbps)}, ${p.delay_ms} ms, ${(p.loss * 100).toFixed(1)}% loss`;
+    b.addEventListener("click", () => post("/api/network", { preset: key }));
+    pre.appendChild(b);
+  }
+  const q = $("quality");
+  for (const r of [{ id: null, label: "Auto" }, ...info.renditions.map((r) => ({ id: r.id, label: r.id }))]) {
+    const b = document.createElement("button");
+    b.type = "button"; b.dataset.key = r.id ?? ""; b.textContent = r.label;
+    b.addEventListener("click", () => post("/api/abr", { pin: r.id }));
+    q.appendChild(b);
+  }
+  let timer = null;
+  const send = () => { clearTimeout(timer); timer = setTimeout(() => post("/api/network", {
+    manual: true, rate_kbps: sliderToRate(+$("sRate").value), delay_ms: +$("sDelay").value, loss: +$("sLoss").value / 1000 }), 150); };
+  for (const id of ["sRate", "sDelay", "sLoss"]) {
+    const el = $(id);
+    el.addEventListener("input", () => { dragging = id; labelSliders(); send(); });
+    el.addEventListener("change", () => { dragging = null; });
+  }
+  $("scenario").addEventListener("change", (e) => post("/api/scenario", { on: e.target.checked }));
+}
+function labelSliders() {
+  $("vRate").textContent = fmtKbpsText(sliderToRate(+$("sRate").value));
+  $("vDelay").textContent = `${$("sDelay").value} ms`;
+  $("vLoss").textContent = `${(+$("sLoss").value / 10).toFixed(1)}%`;
+}
+
+// ---------------------------------------------------------------- events log
+const EVENT_TEXT = {
+  "fast-retransmit": ["◆", "Fast retransmit", "--s-orange"], "timeout": ["▲", "Retransmission timeout", "--text-1"],
+  "switch-up": ["↑", "Quality up", "--good"], "switch-down": ["↓", "Quality down", "--warn"],
+  "network": ["≋", "Network", "--s-blue"], "stall": ["■", "Stall", "--bad"], "abr": ["⚙", "ABR", "--text-2"],
+  "transfer-failed": ["✕", "Transfer failed, retrying", "--bad"], "remux-failed": ["✕", "Remux failed", "--bad"],
+};
+function logEvent(e) {
+  const [icon, label, color] = EVENT_TEXT[e.kind] || ["•", e.kind, "--text-2"];
+  const li = document.createElement("li");
+  li.innerHTML = `<span class="t">${fmtTime(e.t)}</span><span class="i" style="color:var(${color})">${icon}</span>` +
+                 `<span class="d" title="${e.detail}"><b>${label}</b> ${e.detail}</span>`;
+  const log = $("log");
+  log.prepend(li);
+  while (log.children.length > 60) log.lastChild.remove();
+}
+
+// ---------------------------------------------------------------- render
+function render(s, fromStream = true) {
+  latest = s;
+  const n = s.network, p = s.playback, tr = s.transport;
+  if (fromStream) {
+    pushSample(s);
+    for (const seg of s.new_segments || []) { enqueue(seg); points.push({ t: s.t, kbps: seg.throughput_kbps, rendition: seg.rendition }); }
+    for (const e of s.events || []) {
+      // Fast retransmits are frequent: they show as chart markers and in the tile, not in the log.
+      if (e.kind !== "fast-retransmit") logEvent(e);
+      if ((e.kind === "fast-retransmit" || e.kind === "timeout") && e.t >= data.t[0]) marks.push({ t: e.t, kind: e.kind });
+    }
+  }
+  $("clock").textContent = fmtTime(s.t);
+  // tiles
+  const playing = playingMeta() || p.current;
+  $("tQuality").innerHTML = playing ? playing.rendition : "—";
+  $("hQuality").textContent = playing ? `${fmtKbpsText(playing.bitrate_kbps)} · ${p.pinned ? "pinned" : "auto"}` : " ";
+  $("tEst").innerHTML = fmtKbps(p.estimate_kbps || null);
+  $("hEst").textContent = n.rate_kbps ? `link ${fmtKbpsText(n.rate_kbps)}` : "link unlimited";
+  $("tRtt").innerHTML = tr.srtt_ms == null ? "—" : `${Math.round(tr.srtt_ms)}<small>ms</small>`;
+  $("hRtt").textContent = tr.rto_ms ? `RTO ${Math.round(tr.rto_ms)} ms` : " ";
+  $("tBuf").innerHTML = `${p.buffer.toFixed(1)}<small>s</small>`;
+  $("hBuf").textContent = p.startup_delay != null ? `startup ${p.startup_delay.toFixed(2)} s` : " ";
+  $("tRetx").innerHTML = `${s.retransmit_pct.toFixed(1)}<small>%</small>`;
+  $("hRetx").textContent = `${tr.fast_recoveries} fast · ${tr.timeouts} timeouts`;
+  $("tStall").innerHTML = `${p.stalls}`;
+  $("hStall").textContent = `${p.stall_seconds.toFixed(1)} s total`;
+  const rend = playing && info.renditions.find((r) => r.id === playing.rendition);
+  $("badge").innerHTML = rend ? `Playing ${rend.id}<small>${rend.width}×${rend.height}</small>` : "—";
+  // controls reflect server state
+  for (const b of $("presets").children) b.classList.toggle("on", b.dataset.key === n.preset);
+  for (const b of $("quality").children) b.classList.toggle("on", (b.dataset.key || null) === (p.pinned || null));
+  if (dragging === null) {
+    $("sRate").value = rateToSlider(n.rate_kbps || R_MAX);
+    $("sDelay").value = Math.round(n.delay_ms);
+    $("sLoss").value = Math.round(n.loss * 1000);
+    labelSliders();
+  }
+  $("scenario").checked = n.scenario;
+  if (fromStream) Chart.all.forEach((c) => c.draw());
+}
+
+// ---------------------------------------------------------------- boot
+(async function boot() {
+  info = await (await fetch("/api/info")).json();
+  buildControls();
+  initPlayer();
+  const es = new EventSource("/api/events");
+  es.onopen = () => { $("liveDot").classList.add("live"); $("liveText").textContent = "Streaming over RUDP"; };
+  es.onerror = () => { $("liveDot").classList.remove("live"); $("liveText").textContent = "Disconnected – is the server running?"; };
+  es.onmessage = (m) => render(JSON.parse(m.data));
+})();
+</script>
+</body>
+</html>

@@ -84,6 +84,15 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--loss", type=float, default=0.0, help="extra random loss on top of bottleneck drops")
     p.add_argument("--delay", type=float, default=20.0, metavar="MS")
 
+    p = sub.add_parser("dashboard", help="live web dashboard: watch the stream and change the network")
+    p.add_argument("--media", type=Path, default=None,
+                   help="prepared media directory (default: a cached 30 s test video)")
+    p.add_argument("--port", type=int, default=8080, help="web page port")
+    p.add_argument("--host", default="127.0.0.1", help="web page address (0.0.0.0 to view from other devices)")
+    p.add_argument("--preset", default="wifi", choices=["fiber", "wifi", "4g", "3g", "congested"],
+                   help="starting network conditions")
+    p.add_argument("--no-browser", action="store_true", help="do not open the browser automatically")
+
     p = sub.add_parser("bench", help="run experiments and draw charts")
     p.add_argument("--out", type=Path, default=Path("docs/images"))
     p.add_argument("--media", type=Path, default=None, help="use an already prepared media directory")
@@ -206,6 +215,12 @@ def cmd_demo(args) -> int:
     return 0
 
 
+def cmd_dashboard(args) -> int:
+    from .dashboard import run
+    run(args.media, args.host, args.port, open_browser=not args.no_browser, preset=args.preset)
+    return 0
+
+
 def cmd_bench(args) -> int:
     from .bench import run_all
     run_all(args.out, args.media, args.quick)
@@ -227,6 +242,7 @@ def cmd_dns(args) -> int:
 
 
 COMMANDS = {"prepare": cmd_prepare, "serve": cmd_serve, "stream": cmd_stream, "demo": cmd_demo,
+            "dashboard": cmd_dashboard,
             "bench": cmd_bench, "dhcp": cmd_dhcp, "dns": cmd_dns}
 
 

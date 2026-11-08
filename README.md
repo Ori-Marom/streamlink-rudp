@@ -64,6 +64,24 @@ The bandwidth drops to 1.3 Mbps at 8 s and recovers at 15 s: the player climbs t
 1080p, steps down to 360p while the buffer absorbs the drop, and climbs back, with
 no stall. Add `--play` to watch it live.
 
+## Live dashboard
+
+```sh
+python -m streamlink_rudp dashboard
+```
+
+Opens a page where the video plays in the browser while you change the network
+under it: pick a preset (Fiber, Wi-Fi, 4G, 3G, Congested), drag the bandwidth,
+delay and loss sliders, pin a quality, or switch on the auto scenario. The charts
+update four times a second, so you can watch the congestion window halve on loss,
+the RTO follow the RTT, the buffer drain and the player change quality in response.
+
+![Live dashboard](docs/images/dashboard.png)
+
+Every frame the browser plays first crossed the emulated network over RUDP; the
+page only fetches finished segments from the local process, remuxed to fragmented
+MP4 for Media Source Extensions. No JavaScript libraries are used.
+
 ## Highlights
 
 - **A real reliable transport**, not stop-and-wait: 20-byte binary header with
@@ -83,7 +101,9 @@ no stall. Add `--play` to watch it live.
 - **A network emulator** (like `tc netem`, in user space): loss, delay, jitter,
   reordering, duplication, corruption, and a bandwidth bottleneck with a drop-tail
   queue that changes over time.
-- **Measured, not claimed**: 39 tests (including a bit-flip test on every header
+- **A live web dashboard**: video in the browser beside real-time charts of cwnd,
+  RTT/RTO, throughput and buffer, with sliders that change the network as you watch.
+- **Measured, not claimed**: 47 tests (including a bit-flip test on every header
   bit and a full video round trip over a lossy link), CI on Linux, Windows and
   macOS, and benchmarks that regenerate every chart below.
 
@@ -96,7 +116,8 @@ No Python packages are needed.
 ```sh
 git clone https://github.com/Ori-Marom/streamlink-rudp.git
 cd streamlink-rudp
-python -m streamlink_rudp demo --play      # everything in one command
+python -m streamlink_rudp dashboard        # live dashboard in your browser
+python -m streamlink_rudp demo --play      # terminal demo with a video window
 python -m streamlink_rudp demo --quick     # small video, ~15 seconds, no player needed
 ```
 
@@ -204,6 +225,9 @@ streamlink_rudp/
 ├── server.py       # multi-client media server (RUDP + TCP)
 ├── client.py       # adaptive streaming client, integrity checks, live player
 ├── discovery.py    # DHCP-style allocator, DNS resolver, DNS over HTTP
+├── dashboard.py    # live dashboard: streaming loop, HTTP + Server-Sent Events, controls
+├── telemetry.py    # live sender statistics shared with the dashboard
+├── web/            # dashboard page (vanilla JS, Media Source Extensions, canvas charts)
 ├── bench.py        # experiments and charts
 └── cli.py          # python -m streamlink_rudp ...
 tests/              # unit, transport, system and video end-to-end tests
@@ -213,7 +237,7 @@ docs/               # protocol spec, validation notes, charts
 ## Run the tests
 
 ```sh
-python -m unittest discover -s tests -v     # ~25 s; video tests are skipped without ffmpeg
+python -m unittest discover -s tests -v     # ~30 s; video tests are skipped without ffmpeg
 python -m streamlink_rudp bench --quick     # quick benchmark (charts need: pip install matplotlib)
 ```
 
