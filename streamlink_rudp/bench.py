@@ -107,7 +107,7 @@ def cwnd_trace(size: int = 6_000_000, rate_kbps: float = 8000, delay_ms: float =
 
 
 def abr_session(media_dir: Path, profile: list[tuple[float, float]], out_dir: Path,
-                delay_ms: float = 20.0, progress=print):
+                delay_ms: float = 20.0, max_buffer: float = 10.0, progress=print):
     from .client import StreamClient
     from .server import MediaServer
 
@@ -120,7 +120,8 @@ def abr_session(media_dir: Path, profile: list[tuple[float, float]], out_dir: Pa
             progress(f"  t={rec.at:5.1f}s  segment {rec.index:2d}  {rec.rendition:>5}  "
                      f"measured {rec.throughput_kbps:7.0f} kbps  buffer {rec.buffer_before:4.1f}s")
 
-        report = client.stream(out_dir, realtime=True, make_mp4=False, on_segment=on_segment)
+        report = client.stream(out_dir, realtime=True, max_buffer=max_buffer, make_mp4=False,
+                               on_segment=on_segment)
     return report
 
 
@@ -153,6 +154,10 @@ def plot_loss_sweep(rows: list[dict], path: Path) -> None:
     a.set_xlabel("Packet loss (%) each direction, RTT 40 ms")
     a.set_ylabel("Goodput (Mbps)")
     a.set_yscale("log")
+    from matplotlib.ticker import FixedLocator, FuncFormatter, NullLocator
+    a.yaxis.set_major_locator(FixedLocator([0.1, 0.2, 0.5, 1, 2, 5, 10, 20]))
+    a.yaxis.set_minor_locator(NullLocator())
+    a.yaxis.set_major_formatter(FuncFormatter(lambda v, _: f"{v:g}"))
     b.set_title("Retransmission overhead")
     b.set_xlabel("Packet loss (%) each direction, RTT 40 ms")
     b.set_ylabel("Retransmitted segments (%)")
@@ -176,7 +181,8 @@ def plot_cwnd(result: TransferResult, rate_kbps: float, path: Path) -> None:
                    zorder=3, label="Loss detected (fast retransmit)", transform=ax.get_xaxis_transform())
     ymax = max(p[1] for p in trace) * 1.25
     ax.set_ylim(0, ymax)
-    ax.set_title(f"Congestion control through a {rate_kbps / 1000:g} Mbps bottleneck")
+    ax.set_title(f"Congestion control through a {rate_kbps / 1000:g} Mbps bottleneck "
+                 f"(goodput {result.receiver.throughput_bps / 1e6:.1f} Mbps)")
     ax.set_xlabel("Time (s)")
     ax.set_ylabel("Window (segments)")
     ax.legend(loc="upper left", ncol=3)
@@ -248,7 +254,7 @@ def run_all(out_dir: Path, media_dir: Path | None = None, quick: bool = False, p
             manifest = json.loads((Path(media_dir) / media.MANIFEST_NAME).read_text())
         rates = [r["bandwidth"] / 1000 for r in manifest["renditions"]]
         dur = manifest["duration"]
-        profile = [(0.0, rates[-1] * 1.6), (dur * 0.3, rates[0] * 1.5), (dur * 0.6, rates[-1] * 1.6)]
+        profile = [(0.0, rates[-1] * 1.6), (dur * 0.25, rates[0] * 1.5), (dur * 0.5, rates[-1] * 1.6)]
         report = abr_session(Path(media_dir), profile, tmp / "session", progress=progress)
     results["abr"] = json.loads(report.to_json())
     results["abr"]["profile"] = profile

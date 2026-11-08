@@ -24,24 +24,39 @@ retransmission timers, congestion control, the adaptive-bitrate player logic,
 and a network emulator to stress all of it.
 
 ```console
-$ python -m streamlink_rudp demo --play
+$ python -m streamlink_rudp demo
 [1/4] Preparing a 30s test video in 3 qualities (ffmpeg)...
+      bandwidth profile: 0s: 7.6 Mbps, 8s: 1.3 Mbps, 15s: 7.6 Mbps
 [2/4] Starting DHCP, DNS and the media server...
 [3/4] Discovery
       DHCP: leased 192.168.1.100
       DNS:  app.server.local -> 127.0.0.1
-[4/4] Streaming over RUDP with adaptive bitrate (playing live)
-  seg   0    360p  ###                     6880 kbps measured   buffer   2.0s
-  seg   1    720p  ##########              7104 kbps measured   buffer   3.4s
-  seg   2   1080p  ###################     7012 kbps measured   buffer   4.2s
-  ...                                       ← bandwidth drops to 1.2 Mbps
-  seg   7    360p  ###                     1121 kbps measured   buffer   5.1s
-  ...
-  Downloaded   15 segments, 13.4 MB in 31.2s over RUDP
-  Bitrate      avg 2973 kbps, 4 quality switches
-  Playback     startup 0.31s, 0 stalls (0.0s)
+[4/4] Streaming over RUDP with adaptive bitrate
+  seg   0    360p  ###                      4144 kbps measured   buffer   2.0s
+  seg   1    360p  ###                      4558 kbps measured   buffer   3.6s
+  seg   2    360p  ###                      4511 kbps measured   buffer   5.2s
+  seg   3    360p  ###                      4495 kbps measured   buffer   6.8s
+  seg   4    720p  ##########               5928 kbps measured   buffer   8.0s
+  seg   5    720p  ##########               5968 kbps measured   buffer   9.2s
+  seg   6    720p  ##########               5976 kbps measured   buffer  10.5s
+  seg   7    720p  ##########               6032 kbps measured   buffer  11.2s
+  seg   8   1080p  ###################      2412 kbps measured   buffer   8.0s
+  seg   9    720p  ##########               1172 kbps measured   buffer   5.9s
+  seg  10    360p  ###                      2482 kbps measured   buffer   7.2s
+  seg  11    360p  ###                      3510 kbps measured   buffer   8.7s
+  seg  12    360p  ###                      3558 kbps measured   buffer  10.2s
+  seg  13    360p  ###                      3549 kbps measured   buffer  11.5s
+  seg  14    720p  ##########               5303 kbps measured   buffer  11.1s
+
+  Downloaded   15 segments, 6.5 MB in 19.3s over RUDP
+  Bitrate      avg 1731 kbps, 5 quality switches
+  Playback     startup 0.35s, 0 stalls (0.0s)
   Saved        downloads/stream.mp4
 ```
+
+The bandwidth drops to 1.3 Mbps at 8 s and recovers at 15 s: the player climbs to
+1080p, steps down to 360p while the buffer absorbs the drop, and climbs back, with
+no stall. Add `--play` to watch it live.
 
 ## Highlights
 
@@ -62,7 +77,7 @@ $ python -m streamlink_rudp demo --play
 - **A network emulator** (like `tc netem`, in user space): loss, delay, jitter,
   reordering, duplication, corruption, and a bandwidth bottleneck with a drop-tail
   queue that changes over time.
-- **Measured, not claimed**: 40 tests (including a bit-flip test on every header
+- **Measured, not claimed**: 39 tests (including a bit-flip test on every header
   bit and a full video round trip over a lossy link), CI on Linux, Windows and
   macOS, and benchmarks that regenerate every chart below.
 
@@ -144,19 +159,30 @@ charts and [`docs/images/results.json`](docs/images/results.json).
 A 6 MB transfer through an emulated **8 Mbps** link with 40 ms RTT and a 40 ms
 drop-tail queue. Slow start ramps up exponentially until the queue overflows,
 then the window follows the classic NewReno sawtooth: halve on loss, grow by
-one segment per RTT. CWND_SUMMARY
+one segment per RTT. Result: **7.6 Mbps of goodput on an 8 Mbps link (95% utilization)**, with 3 fast recoveries and 0 timeouts; every loss was repaired without waiting for a timer.
 
 ### SACK + adaptive RTO vs Go-Back-N + fixed timeout
 
 ![loss sweep](docs/images/loss_sweep.png)
 
-LOSS_TABLE
+1 MB transfers, 40 ms RTT, loss applied to data *and* ACKs, mean of 3 seeds.
+
+| Loss (each direction) | SACK + adaptive RTO | Go-Back-N + fixed RTO | Speed-up | Retransmitted (SACK / GBN) |
+|---:|---:|---:|---:|---:|
+| 0% | 10.60 Mbps | 10.56 Mbps | 1.0× | 0.0% / 0.0% |
+| 1% | 4.40 Mbps | 1.79 Mbps | 2.5× | 1.0% / 31.3% |
+| 2% | 2.32 Mbps | 1.02 Mbps | 2.3× | 2.0% / 21.6% |
+| 5% | 1.10 Mbps | 0.42 Mbps | 2.6× | 5.6% / 19.1% |
+| 10% | 0.64 Mbps | 0.16 Mbps | 3.9× | 11.7% / 22.5% |
+
+With SACK the sender retransmits almost exactly what was lost (retransmissions ≈ loss rate),
+while Go-Back-N resends whole windows and stalls on its fixed 1 s timer.
 
 ### Adaptive bitrate while the network changes
 
 ![ABR session](docs/images/abr_session.png)
 
-ABR_SUMMARY
+A 40 s 1080p test video, served through a bottleneck that drops from 7.6 to 1.3 Mbps at 10 s and recovers at 20 s. The client ramps up one rendition at a time, holds a 10 s buffer, drops to 360p while the buffer drains from 10 s to about 4 s, and climbs back once bandwidth returns: **6 quality switches, 0 stalls, 0.31 s startup**.
 
 ## Project layout
 

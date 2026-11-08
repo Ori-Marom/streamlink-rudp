@@ -81,7 +81,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--duration", type=float, default=30.0)
     p.add_argument("--bw-profile", default=None, metavar="T:KBPS,...",
                    help="server bandwidth over time (default: high, then a drop, then recovery)")
-    p.add_argument("--loss", type=float, default=0.01)
+    p.add_argument("--loss", type=float, default=0.0, help="extra random loss on top of bottleneck drops")
     p.add_argument("--delay", type=float, default=20.0, metavar="MS")
 
     p = sub.add_parser("bench", help="run experiments and draw charts")
@@ -179,7 +179,7 @@ def cmd_demo(args) -> int:
             profile = NetemConfig.parse_profile(args.bw_profile)
         else:
             d = manifest["duration"]
-            profile = [(0.0, rates[-1] * 1.6), (d * 0.35, rates[0] * 1.5), (d * 0.65, rates[-1] * 1.6)]
+            profile = [(0.0, rates[-1] * 1.6), (d * 0.25, rates[0] * 1.5), (d * 0.5, rates[-1] * 1.6)]
         print("      bandwidth profile: " + ", ".join(f"{t:.0f}s: {k / 1000:.1f} Mbps" for t, k in profile))
 
         print("[2/4] Starting DHCP, DNS and the media server...")
@@ -198,7 +198,8 @@ def cmd_demo(args) -> int:
                   + (" (playing live)" if args.play else ""))
             server.emulator.reset_clock()
             client = StreamClient(host, server.udp_port)
-            report = client.stream(args.out, play=args.play, realtime=True, on_segment=_print_segment)
+            report = client.stream(args.out, play=args.play, realtime=True, max_buffer=10.0,
+                                   on_segment=_print_segment)
             _print_report(report)
         finally:
             server.stop(); dhcp.stop(); dns.stop()
