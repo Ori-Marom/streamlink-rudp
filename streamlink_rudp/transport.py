@@ -122,8 +122,10 @@ class Sender:
     """Sends one byte string to a receiver that has requested it."""
 
     def __init__(self, sock, peer, conn_id: int, data: bytes, config: SenderConfig | None = None,
-                 rng: random.Random | None = None, path: PathState | None = None):
+                 rng: random.Random | None = None, path: PathState | None = None,
+                 telemetry=None):
         self.sock = sock
+        self.telemetry = telemetry  # optional live statistics sink (see telemetry.py)
         self.peer = peer
         self.conn_id = conn_id
         self.data = data
@@ -171,13 +173,31 @@ class Sender:
 
     def _event(self, kind: str) -> None:
         self.stats.events.append((time.monotonic() - self._t0, kind))
+        if self.telemetry is not None:
+            tel = self.telemetry
+            if kind == "timeout":
+                tel.timeouts += 1
+            elif kind == "fast-retransmit":
+                tel.fast_recoveries += 1
+            tel.event(kind, f"cwnd {self.cc.cwnd:.1f}, ssthresh {self.cc.ssthresh:.1f}")
+
+    def _publish(self) -> None:
+        tel = self.telemetry
+        if tel is not None:
+            tel.cwnd, tel.ssthresh, tel.phase = self.cc.cwnd, self.cc.ssthresh, self.cc.phase
+            tel.srtt, tel.rto = self.rto.srtt, self.rto.rto
 
     # -- phases ----------------------------------------------------------------------
     def run(self) -> SenderStats:
         self._t0 = time.monotonic()
         rwnd = self._handshake()
+        self._publish()
         self._transfer(rwnd)
         self._finish()
+        if self.telemetry is not None:
+            self.telemetry.transfers += 1
+            self.telemetry.pipe = 0
+            self._publish()
         self.stats.duration = time.monotonic() - self._t0
         self.stats.srtt = self.rto.srtt
         return self.stats
@@ -233,8 +253,13 @@ class Sender:
         base_seq = pk.seq_add(self.isn, 1)
         last_trace = -1.0
 
+        tel = self.telemetry
+
         def trace(now: float) -> None:
             nonlocal last_trace
+            if tel is not None:
+                tel.cwnd, tel.ssthresh, tel.pipe, tel.phase = cc.cwnd, cc.ssthresh, pipe, cc.phase
+                tel.srtt, tel.rto = rto.srtt, rto.rto
             if cfg.trace and now - last_trace >= 0.002:
                 last_trace = now
                 stats.trace.append((now - self._t0, cc.cwnd, cc.ssthresh, pipe, rto.rto))
@@ -254,6 +279,10 @@ class Sender:
             if sent_at[i]:
                 retx[i] += 1
                 stats.retransmissions += 1
+                if tel is not None:
+                    tel.retransmissions += 1
+            elif tel is not None:
+                tel.segments_sent += 1
             sent_at[i] = now
             lost[i] = 0
             inflight[i] = 1
@@ -337,6 +366,8 @@ class Sender:
                         inflight[i] = 0
                         pipe -= 1
                 newly_acked = cum - una
+                if tel is not None:
+                    tel.acked_bytes += min(cum * mss, len(self.data)) - min(una * mss, len(self.data))
                 una = cum
                 dupacks = 0
                 consecutive_timeouts = 0

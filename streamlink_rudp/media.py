@@ -121,7 +121,7 @@ def synthesize_source(path: Path, duration: float = 30.0, width: int = 1920, hei
 
 
 def _label_filter(r: Rendition) -> str:
-    text = f"{r.name}  {r.video_kbps} kbps"
+    text = f"{r.name}  {r.width}x{r.height}"
     font = _font_file()
     fontfile = f"fontfile='{_escape_filter_path(font)}':" if font else ""
     return (f"drawtext={fontfile}text='{text}':fontcolor=white:fontsize=h/14:box=1:"
@@ -234,3 +234,22 @@ def to_mp4(ts_path: Path, mp4_path: Path, renditions_used: set[str], height: int
               "-preset", "veryfast", "-crf", "18", "-pix_fmt", "yuv420p", "-c:a", "copy",
               "-movflags", "+faststart", str(mp4_path)])
     return mp4_path
+
+
+def ts_to_fmp4(segment: bytes) -> bytes:
+    """Remux one MPEG-TS segment into a self-contained fragmented MP4 (no re-encode).
+
+    Browsers play fragmented MP4 through Media Source Extensions, so the dashboard
+    converts each segment as it arrives. The output starts with its own init
+    segment, which lets consecutive segments switch rendition.
+    """
+    exe = _require_ffmpeg()
+    proc = subprocess.run(
+        [exe, "-hide_banner", "-loglevel", "error", "-copyts", "-f", "mpegts", "-i", "pipe:0",
+         "-map", "0:v:0", "-map", "0:a:0?", "-c", "copy", "-bsf:a", "aac_adtstoasc",
+         "-avoid_negative_ts", "disabled", "-use_editlist", "0",
+         "-f", "mp4", "-movflags", "frag_keyframe+empty_moov+delay_moov+default_base_moof+frag_discont", "pipe:1"],
+        input=segment, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    if proc.returncode != 0 or not proc.stdout:
+        raise MediaError(f"remux failed: {proc.stderr.decode(errors='replace')[-500:]}")
+    return proc.stdout

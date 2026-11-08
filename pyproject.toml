@@ -25,3 +25,6 @@ streamlink-rudp = "streamlink_rudp.cli:main"
 
 [tool.setuptools]
 packages = ["streamlink_rudp"]
+
+[tool.setuptools.package-data]
+streamlink_rudp = ["web/*.html"]
