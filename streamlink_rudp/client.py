@@ -16,7 +16,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from .abr import HybridABR, PlaybackModel
-from .media import MANIFEST_NAME, MediaError, ffmpeg_path, load_manifest, to_mp4
+from .media import MANIFEST_NAME, MediaError, ffmpeg_path, find_tool, load_manifest, to_mp4
 from .netem import NetemConfig, NetworkEmulator
 from .server import DEFAULT_TCP_PORT, DEFAULT_UDP_PORT
 from .transport import TransferError, receive
@@ -96,7 +96,7 @@ class Player:
         for name, args in cls.CANDIDATES:
             if preferred and preferred != name:
                 continue
-            exe = shutil.which(name)
+            exe = find_tool(name) if name == "ffplay" else shutil.which(name)
             if not exe and name == "vlc" and cls.WINDOWS_VLC.exists():
                 exe = str(cls.WINDOWS_VLC)
             if exe:

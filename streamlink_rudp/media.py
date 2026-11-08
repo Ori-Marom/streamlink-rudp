@@ -14,6 +14,7 @@ from __future__ import annotations
 import hashlib
 import json
 import logging
+import os
 import shutil
 import subprocess
 from dataclasses import dataclass
@@ -50,8 +51,46 @@ class MediaError(RuntimeError):
     pass
 
 
+def find_tool(name: str) -> str | None:
+    """Locate an ffmpeg-suite executable (ffmpeg, ffprobe, ffplay).
+
+    Besides PATH, look where Windows package managers install it, so a fresh
+    ``winget install Gyan.FFmpeg`` works before the terminal is restarted.
+    """
+    found = shutil.which(name)
+    if found or os.name != "nt":
+        return found
+    local = Path(os.environ.get("LOCALAPPDATA", ""))
+    candidates = [local / "Microsoft" / "WinGet" / "Links" / f"{name}.exe"]
+    candidates += sorted((local / "Microsoft" / "WinGet" / "Packages").glob(f"*FFmpeg*/*/bin/{name}.exe"),
+                         reverse=True)
+    candidates += [Path(os.environ.get("ProgramData", r"C:\ProgramData")) / "chocolatey" / "bin" / f"{name}.exe",
+                   Path.home() / "scoop" / "shims" / f"{name}.exe",
+                   Path(r"C:\ffmpeg\bin") / f"{name}.exe"]
+    return next((str(c) for c in candidates if c.is_file()), None)
+
+
 def ffmpeg_path() -> str | None:
-    return shutil.which("ffmpeg")
+    return find_tool("ffmpeg")
+
+
+def _font_file() -> str | None:
+    """A TrueType font for the text overlay. ffmpeg builds without fontconfig
+    (common on Windows) cannot pick a default font, so we pass one explicitly."""
+    windir = Path(os.environ.get("WINDIR", r"C:\Windows"))
+    for path in (windir / "Fonts" / "segoeui.ttf", windir / "Fonts" / "arial.ttf",
+                 Path("/System/Library/Fonts/Supplemental/Arial.ttf"),
+                 Path("/Library/Fonts/Arial.ttf"),
+                 Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
+                 Path("/usr/share/fonts/TTF/DejaVuSans.ttf")):
+        if path.is_file():
+            return path.as_posix()
+    return None
+
+
+def _escape_filter_path(path: str) -> str:
+    # In a filter option the drive-letter colon must be escaped: C\:/Windows/Fonts/arial.ttf
+    return path.replace("\\", "/").replace(":", "\\:")
 
 
 def _run(cmd: list[str]) -> None:
@@ -83,7 +122,9 @@ def synthesize_source(path: Path, duration: float = 30.0, width: int = 1920, hei
 
 def _label_filter(r: Rendition) -> str:
     text = f"{r.name}  {r.video_kbps} kbps"
-    return (f"drawtext=text='{text}':fontcolor=white:fontsize=h/14:box=1:"
+    font = _font_file()
+    fontfile = f"fontfile='{_escape_filter_path(font)}':" if font else ""
+    return (f"drawtext={fontfile}text='{text}':fontcolor=white:fontsize=h/14:box=1:"
             f"boxcolor=black@0.55:boxborderw=12:x=w-tw-24:y=24")
 
 
