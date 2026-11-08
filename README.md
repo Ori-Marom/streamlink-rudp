@@ -23,6 +23,12 @@ plain Python: the wire format, the handshake, selective acknowledgements,
 retransmission timers, congestion control, the adaptive-bitrate player logic,
 and a network emulator to stress all of it.
 
+<p align="center">
+  <img src="docs/images/demo.gif" width="560"
+       alt="A video downloaded over RUDP: the quality label climbs from 360p to 720p and 1080p, drops to 360p when bandwidth falls, and climbs back">
+  <br><sub>A stream downloaded over RUDP (played at 2× speed). The label shows which rendition each segment came in: quality climbs, drops when the bandwidth does, and recovers.</sub>
+</p>
+
 ```console
 $ python -m streamlink_rudp demo
 [1/4] Preparing a 30s test video in 3 qualities (ffmpeg)...
