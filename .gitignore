@@ -19,3 +19,9 @@ downloads/
 !.env.example
 .DS_Store
 Thumbs.db
+
+# Prepared media and benchmark scratch output
+media/
+demo-output/
+*.egg-info/
+build/

@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "streamlink-rudp"
+version = "2.0.0"
+description = "Adaptive video streaming over a custom reliable UDP transport (SACK, RFC 6298 RTO, NewReno)."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "Ori Marom" }]
+keywords = ["networking", "udp", "reliable-transport", "congestion-control", "video-streaming", "abr"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Topic :: System :: Networking",
+    "Topic :: Multimedia :: Video",
+]
+dependencies = []  # the transport, server and client use only the standard library
+
+[project.optional-dependencies]
+bench = ["matplotlib>=3.7"]
+
+[project.scripts]
+streamlink-rudp = "streamlink_rudp.cli:main"
+
+[tool.setuptools]
+packages = ["streamlink_rudp"]

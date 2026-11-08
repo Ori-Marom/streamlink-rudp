@@ -1,1 +1,4 @@
-# No third-party dependencies. Uses the Python standard library only.
+# The transport, server, client and discovery services use only the Python standard library.
+# Video preparation and playback use the ffmpeg command-line tools (https://ffmpeg.org).
+# Optional, for `python -m streamlink_rudp bench` charts:
+#   matplotlib>=3.7
